@@ -63,6 +63,17 @@ def _clear_action(action: bpy.types.Action) -> None:
         action.fcurves.remove(fc)
 
 
+def _shift_action_frames(action: bpy.types.Action, delta: float) -> None:
+    if not action or not delta:
+        return
+    for fc in action.fcurves:
+        for kp in fc.keyframe_points:
+            kp.co.x += delta
+            kp.handle_left.x += delta
+            kp.handle_right.x += delta
+        fc.update()
+
+
 def _select_only(obj: bpy.types.Object) -> None:
     for o in bpy.context.selected_objects:
         o.select_set(False)
@@ -507,6 +518,165 @@ class CBB_OT_import_retarget_bake_to_selected(OperatorBaseClass):
     def execute(self, context):
         self.start_operator()
         self.target_armature_obj = bpy.context.active_object
+        self._actions_before = set(bpy.data.actions)
+
+        CascadeurHandler().execute_csc_command("commands.externals.temp_exporter")
+        context.window_manager.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
+
+
+class CBB_OT_retarget_config_add(bpy.types.Operator):
+    bl_idname = "cbb.retarget_config_add"
+    bl_label = "Add Retarget Config"
+
+    def execute(self, context):
+        cfg = context.scene.cbb_retarget_configs.add()
+        context.scene.cbb_retarget_configs_index = len(context.scene.cbb_retarget_configs) - 1
+        if context.active_object and context.active_object.type == "ARMATURE":
+            cfg.target_armature = context.active_object
+        return {"FINISHED"}
+
+
+class CBB_OT_retarget_config_remove(bpy.types.Operator):
+    bl_idname = "cbb.retarget_config_remove"
+    bl_label = "Remove Retarget Config"
+
+    def execute(self, context):
+        idx = int(context.scene.cbb_retarget_configs_index)
+        items = context.scene.cbb_retarget_configs
+        if 0 <= idx < len(items):
+            items.remove(idx)
+            context.scene.cbb_retarget_configs_index = max(0, idx - 1)
+        return {"FINISHED"}
+
+
+class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
+    """Import animation from Cascadeur and retarget/bake to a configured armature."""
+
+    bl_idname = "cbb.import_cascadeur_retarget_bake_config"
+    bl_label = "Import (Config)"
+
+    config_index: bpy.props.IntProperty(default=0)
+
+    target_armature_obj: Optional[bpy.types.Object] = None
+    imported_objects: list[bpy.types.Object] = []
+    _actions_before: set[bpy.types.Action] = set()
+    _preserve_existing_keys: bool = False
+    _start_frame: int = 0
+
+    @classmethod
+    def poll(cls, context):
+        return hasattr(context.scene, "cbb_retarget_configs")
+
+    def modal(self, context, event):
+        if event.type == "ESC":
+            self._cleanup()
+            return {"CANCELLED"}
+
+        self.server_socket.run()
+
+        if self.server_socket.client_socket:
+            self.server_socket.send_message(get_csc_export_settings())
+            data = self.server_socket.receive_message()
+            if data:
+                if not isinstance(data, list):
+                    self.report({"ERROR"}, f"Unexpected response: {str(data)}")
+                    addon_info.operation_completed = True
+                    return {"CANCELLED"}
+
+                fbx_path = data[0]
+                imported = import_fbx(fbx_path)
+                self.imported_objects.extend(imported)
+                file_handling.delete_file(fbx_path)
+
+                source_armature_obj = _find_first_armature(imported)
+                if not source_armature_obj:
+                    self.report({"ERROR"}, "No armature found in imported FBX.")
+                    delete_objects(self.imported_objects)
+                    self._cleanup()
+                    return {"CANCELLED"}
+
+                if not self.target_armature_obj or self.target_armature_obj.type != "ARMATURE":
+                    self.report({"ERROR"}, "Invalid target armature in config.")
+                    delete_objects(self.imported_objects)
+                    self._cleanup()
+                    return {"CANCELLED"}
+
+                target_action = _ensure_current_action(self.target_armature_obj)
+                if not self._preserve_existing_keys:
+                    _clear_action(target_action)
+
+                src_action = None
+                if source_armature_obj.animation_data:
+                    src_action = source_armature_obj.animation_data.action
+
+                if src_action:
+                    src_start = int(src_action.frame_range[0])
+                    src_end = int(src_action.frame_range[1])
+                else:
+                    src_start = int(context.scene.frame_start)
+                    src_end = int(context.scene.frame_end)
+
+                if self._start_frame > 0:
+                    desired_start = int(self._start_frame)
+                elif self._preserve_existing_keys:
+                    desired_start = int(context.scene.frame_current)
+                else:
+                    desired_start = int(src_start)
+
+                delta = float(desired_start - src_start)
+                if src_action and delta:
+                    _shift_action_frames(src_action, delta)
+                    src_start = desired_start
+                    src_end = int(src_end + delta)
+
+                try:
+                    _retarget_and_bake_pose(
+                        source_armature_obj=source_armature_obj,
+                        target_armature_obj=self.target_armature_obj,
+                        frame_start=int(src_start),
+                        frame_end=int(src_end),
+                    )
+                except Exception as e:
+                    self.report({"ERROR"}, f"Retarget/bake failed: {e}")
+                    delete_objects(self.imported_objects)
+                    self._cleanup()
+                    return {"CANCELLED"}
+
+                delete_objects(self.imported_objects)
+                for act in list(bpy.data.actions):
+                    if act not in self._actions_before and act != target_action:
+                        try:
+                            bpy.data.actions.remove(act)
+                        except Exception:
+                            pass
+
+                self.target_armature_obj.select_set(True)
+                bpy.context.view_layer.objects.active = self.target_armature_obj
+                self.report({"INFO"}, "Finished")
+                self._cleanup()
+                return {"FINISHED"}
+
+        return {"PASS_THROUGH"}
+
+    def execute(self, context):
+        self.start_operator()
+        items = context.scene.cbb_retarget_configs
+        idx = int(self.config_index)
+        if idx < 0 or idx >= len(items):
+            self.report({"ERROR"}, "Invalid config index.")
+            addon_info.operation_completed = True
+            return {"CANCELLED"}
+
+        cfg = items[idx]
+        if not cfg.target_armature or cfg.target_armature.type != "ARMATURE":
+            self.report({"ERROR"}, "Pick a target armature in this config.")
+            addon_info.operation_completed = True
+            return {"CANCELLED"}
+
+        self.target_armature_obj = cfg.target_armature
+        self._preserve_existing_keys = bool(cfg.preserve_existing_keys)
+        self._start_frame = int(cfg.start_frame)
         self._actions_before = set(bpy.data.actions)
 
         CascadeurHandler().execute_csc_command("commands.externals.temp_exporter")

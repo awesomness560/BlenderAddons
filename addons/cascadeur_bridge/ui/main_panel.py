@@ -80,6 +80,27 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             icon="IMPORT",
         )
         props.batch_export = False
+
+        # Retarget configs list
+        box = layout.box()
+        header = box.row(align=True)
+        header.label(text="Retarget Configs")
+        header.operator("cbb.retarget_config_add", text="", icon="ADD")
+        header.operator("cbb.retarget_config_remove", text="", icon="REMOVE")
+
+        configs = context.scene.cbb_retarget_configs
+        for idx, cfg in enumerate(configs):
+            row_box = box.box()
+            row = row_box.row(align=True)
+            row.prop(cfg, "target_armature", text="")
+            op = row.operator(
+                "cbb.import_cascadeur_retarget_bake_config", text="Import", icon="IMPORT"
+            )
+            op.config_index = idx
+
+            row = row_box.row(align=True)
+            row.prop(cfg, "preserve_existing_keys", text="Preserve keys (insert)")
+            row.prop(cfg, "start_frame", text="Start")
         # Batch
         col = box.column(align=True)
         col.label(text="Batch Import")

@@ -422,14 +422,46 @@ class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
     )
 
 
+class CBB_PG_retarget_config(bpy.types.PropertyGroup):
+    target_armature: bpy.props.PointerProperty(
+        name="Armature",
+        type=bpy.types.Object,
+        poll=lambda self, obj: obj.type == "ARMATURE",
+    )
+
+    start_frame: bpy.props.IntProperty(
+        name="Start Frame",
+        description="If > 0, inserts animation starting at this frame. If 0, uses the timeline cursor when Preserve Keys is enabled; otherwise uses the source frame range.",
+        default=0,
+        min=0,
+    )
+
+    preserve_existing_keys: bpy.props.BoolProperty(
+        name="Preserve Keys",
+        description="Don't erase existing keyframes; insert the imported animation starting at Start Frame (if set) or the timeline cursor.",
+        default=False,
+    )
+
+
 def register_props():
     bpy.utils.register_class(CBB_PG_fbx_settings)
     bpy.types.Scene.cbb_fbx_settings = bpy.props.PointerProperty(
         type=CBB_PG_fbx_settings
     )
+    bpy.utils.register_class(CBB_PG_retarget_config)
+    bpy.types.Scene.cbb_retarget_configs = bpy.props.CollectionProperty(
+        type=CBB_PG_retarget_config
+    )
+    bpy.types.Scene.cbb_retarget_configs_index = bpy.props.IntProperty(default=0)
 
 
 def unregister_props():
+    try:
+        del bpy.types.Scene.cbb_retarget_configs
+        del bpy.types.Scene.cbb_retarget_configs_index
+    except Exception:
+        pass
+    bpy.utils.unregister_class(CBB_PG_retarget_config)
     bpy.utils.unregister_class(CBB_PG_fbx_settings)
 
 
