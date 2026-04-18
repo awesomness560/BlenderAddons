@@ -19,6 +19,7 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
 
     def draw(self, context):
         _ch = CascadeurHandler()
+        addon_props = context.scene.cbb_fbx_settings
         layout = self.layout
         col = layout.column(align=False)
         if not _ch.is_csc_exe_path_valid:
@@ -28,6 +29,7 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             col.separator()
 
         row = col.row()
+
         row.operator(
             "cbb.start_cascadeur",
             text="Start Cascadeur",
@@ -40,6 +42,46 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             col.label(icon="LOCKED", text="Operation in progress!")
             col.separator()
 
+        # Blender to Cascadeur
+        box = layout.box()
+        col = box.column()
+        row = col.row()
+        row.label(text="Blender > Cascadeur")
+        row.scale_y = 1.2
+        row = col.row()
+        row.prop(addon_props, "cbb_import_methods")
+        row.scale_y = 1.2
+        row = col.row()
+        row.operator(
+            "cbb.export_blender_fbx", text="Export To Cascadeur", icon="EXPORT"
+        )
+        # Cascadeur to Blender
+        box = layout.box()
+        col = box.column(align=True)
+        row = col.row()
+        row.label(text="Cascadeur > Blender")
+        row.scale_y = 1.2
+        row = col.row()
+        row.prop(addon_props, "cbb_export_methods")
+        col.operator(
+            "cbb.import_cascadeur_retarget_bake",
+            text="Import + Retarget (Bake)",
+            icon="ARMATURE_DATA",
+        )
+        props = col.operator(
+            "cbb.import_cascadeur_action",
+            text="Import Action",
+            icon="ARMATURE_DATA",
+        )
+        props.batch_export = False
+        props = col.operator(
+            "cbb.import_cascadeur_fbx",
+            text="Import Scene",
+            icon="IMPORT",
+        )
+        props.batch_export = False
+
+        # Retarget configs list
         box = layout.box()
         header = box.row(align=True)
         header.label(text="Retarget Configs")
@@ -70,54 +112,18 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             row = row_box.row(align=True)
             row.prop(cfg, "preserve_existing_keys", text="Preserve keys (insert)")
             row.prop(cfg, "start_frame", text="Start")
-
-
-class CBB_PT_workflow_settings(PanelBasics, bpy.types.Panel):
-    """FBX and socket settings used by Retarget Config imports."""
-
-    bl_idname = "CBB_PT_workflow_settings"
-    bl_label = "Export / Import / Connection"
-    bl_parent_id = "CBB_PT_parent"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw_header(self, context):
-        self.layout.label(text="", icon="SETTINGS")
-
-    def draw(self, context):
-        addon_props = context.scene.cbb_fbx_settings
-        layout = self.layout
-
-        box = layout.box()
-        box.label(text="Cascadeur → Blender (export from Cascadeur)")
+        # Batch
         col = box.column(align=True)
-        col.prop(addon_props, "cbb_export_methods")
-        col.prop(addon_props, "cbb_csc_apply_euler_filter")
-        col.prop(addon_props, "cbb_csc_up_axis")
-        col.prop(addon_props, "cbb_csc_bake_animation")
-        col.prop(addon_props, "cbb_csc_import_selected")
-
-        box = layout.box()
-        box.label(text="Blender FBX import (temporary rig from Cascadeur)")
-        col = box.column(align=True)
-        col.prop(addon_props, "cbb_import_global_scale")
-        col.prop(addon_props, "cbb_import_apply_transform")
-        col.prop(addon_props, "cbb_import_manual_orientation")
-        col.prop(addon_props, "cbb_import_axis_forward")
-        col.prop(addon_props, "cbb_import_axis_up")
-        col.prop(addon_props, "cbb_import_use_anim")
-        col.prop(addon_props, "cbb_import_anim_offset")
-        col.prop(addon_props, "cbb_import_ignore_leaf_bones")
-        col.prop(addon_props, "cbb_import_force_connect_children")
-        col.prop(addon_props, "cbb_import_automatic_bone_orientation")
-        col.prop(addon_props, "cbb_import_primary_bone_axis")
-        col.prop(addon_props, "cbb_import_secondary_bone_axis")
-        col.prop(addon_props, "cbb_import_use_prepost_rot")
-
-        box = layout.box()
-        box.label(text="Connection & presets")
-        row = box.row(align=True)
-        row.prop(addon_props, "cbb_port")
-        row.operator("cbb.save_port_settings", text="", icon="FILE_TICK")
-        row = box.row(align=True)
-        row.operator("cbb.save_fbx_settings", text="Save settings", icon="FAKE_USER_ON")
-        row.operator("cbb.reset_fbx_settings", text="Reset", icon="FILE_REFRESH")
+        col.label(text="Batch Import")
+        props = col.operator(
+            "cbb.import_cascadeur_action",
+            text="Import All Actions",
+            icon="CON_ARMATURE",
+        )
+        props.batch_export = True
+        props = col.operator(
+            "cbb.import_cascadeur_fbx",
+            text="Import All Scenes",
+            icon="DOCUMENTS",
+        )
+        props.batch_export = True

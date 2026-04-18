@@ -4,7 +4,7 @@ bl_info = {
     "version": (1, 1, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Panels > CSC Bridge",
-    "description": "Helps you to integrate Cascadeur to your workflow with Belnder.",
+    "description": "Cascadeur ↔ Blender retarget workflow (FBX bridge).",
     "doc_url": "https://github.com/arcsikex/cascadeur_bridge",
     "tracker_url": "https://github.com/arcsikex/cascadeur_bridge/issues",
     "category": "Animation",

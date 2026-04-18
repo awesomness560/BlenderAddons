@@ -208,6 +208,169 @@ class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
         ),
     )
 
+    # Blender Export settings
+    cbb_export_use_selection: bpy.props.BoolProperty(
+        name="Selected Objects",
+        description="Export selected and visible objects only",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_use_selection",
+            bool,
+            fallback=False,
+        ),
+    )
+
+    cbb_export_object_types: bpy.props.EnumProperty(
+        name="Object Types",
+        options={"ENUM_FLAG"},
+        items=(
+            ("EMPTY", "Empty", ""),
+            ("CAMERA", "Camera", ""),
+            ("LIGHT", "Lamp", ""),
+            ("ARMATURE", "Armature", "WARNING: not supported in dupli/group instances"),
+            ("MESH", "Mesh", ""),
+            (
+                "OTHER",
+                "Other",
+                "Other geometry types, like curve, metaball, etc. (converted to meshes)",
+            ),
+        ),
+        description="Which kind of object to export",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_object_types",
+            set,
+            fallback={"EMPTY", "CAMERA", "LIGHT", "ARMATURE", "MESH", "OTHER"},
+        ),
+    )
+
+    cbb_export_global_scale: bpy.props.FloatProperty(
+        name="Global Scale",
+        description="Scale",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_global_scale",
+            float,
+            fallback=1.0,
+        ),
+        min=0.001,
+        max=1000,
+    )
+
+    cbb_export_axis_forward: bpy.props.EnumProperty(
+        items=generate_items(["X", "Y", "Z", "-X", "-Y", "-Z"]),
+        name="Forward",
+        description="Forward Axis",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_axis_forward",
+            str,
+            fallback="-Z",
+        ),
+    )
+
+    cbb_export_axis_up: bpy.props.EnumProperty(
+        items=generate_items(["X", "Y", "Z", "-X", "-Y", "-Z"]),
+        name="Up",
+        description="Forward Up",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_axis_up",
+            str,
+            fallback="Y",
+        ),
+    )
+
+    cbb_export_apply_transform: bpy.props.BoolProperty(
+        name="Apply Transform",
+        description="Bake space transform into object data. EXPERIMENTAL!",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_apply_transform",
+            bool,
+            fallback=False,
+        ),
+    )
+
+    cbb_export_primary_bone_axis: bpy.props.EnumProperty(
+        items=generate_items(["X", "Y", "Z", "-X", "-Y", "-Z"]),
+        name="Primary Bone Axis",
+        description="",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_primary_bone_axis",
+            str,
+            fallback="Y",
+        ),
+    )
+
+    cbb_export_secondary_bone_axis: bpy.props.EnumProperty(
+        items=generate_items(["X", "Y", "Z", "-X", "-Y", "-Z"]),
+        name="Secondary Bone Axis",
+        description="",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_secondary_bone_axis",
+            str,
+            fallback="X",
+        ),
+    )
+
+    cbb_export_deform_only: bpy.props.BoolProperty(
+        name="Only Deform Bones",
+        description="Only write deforming bones",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_deform_only",
+            bool,
+            fallback=True,
+        ),
+    )
+
+    cbb_export_leaf_bones: bpy.props.BoolProperty(
+        name="Add Leaf Bones",
+        description="Append a final bone to the end of each chain to specify last bone length",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_leaf_bones",
+            bool,
+            fallback=False,
+        ),
+    )
+
+    cbb_export_bake_anim: bpy.props.BoolProperty(
+        name="Baked Animation",
+        description="Export baked keyframe animation",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_bake_anim",
+            bool,
+            fallback=True,
+        ),
+    )
+
+    cbb_export_use_nla_strips: bpy.props.BoolProperty(
+        name="NLA Strips",
+        description="Export each non-muted NLA strip as a separated FBX’s AnimStack, if any, instead of global scene animation",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_use_nla_strips",
+            bool,
+            fallback=False,
+        ),
+    )
+
+    cbb_export_use_all_actions: bpy.props.BoolProperty(
+        name="All Actions",
+        description="Export each action as a separated FBX’s AnimStack, instead of global scene animation",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_export_use_all_actions",
+            bool,
+            fallback=False,
+        ),
+    )
+
     cbb_export_methods: bpy.props.EnumProperty(
         name="Cascadeur Export Method",
         items=(
@@ -227,6 +390,26 @@ class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
             "cbb_export_methods",
             str,
             fallback="export_all_objects",
+        ),
+    )  # type: ignore
+
+    cbb_import_methods: bpy.props.EnumProperty(
+        name="Cascadeur Import Method",
+        items=(
+            ("add_model", "Add Model", ""),
+            ("add_model_to_selected", "Add Model to Selected", ""),
+            ("import_animation", "Animation", ""),
+            ("import_animation_to_selected_frames", "Animation - selected frames", ""),
+            ("import_animation_to_selected_objects", "Animation - selected joints", ""),
+            ("import_model", "Model", ""),
+            ("import_scene", "Scene", ""),
+        ),
+        description="Method to use when exporting from Cascadeur",
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_import_methods",
+            str,
+            fallback="import_model",
         ),
     )  # type: ignore
 
@@ -311,7 +494,7 @@ class CBB_OT_save_fbx_settings(bpy.types.Operator):
         try:
             config_handling.save_fbx_settings()
         except Exception as e:
-            self.report({"ERROR"}, f"Couldn't save settings: {e}")
+            self.report({"ERROR", f"Couldn't save settings: {e}"})
             return {"CANCELLED"}
         self.report({"INFO"}, "Settings saved")
         return {"FINISHED"}
@@ -329,7 +512,7 @@ class CBB_OT_reset_fbx_settings(bpy.types.Operator):
             # Update UI panel
             bpy.context.area.tag_redraw()
         except Exception as e:
-            self.report({"ERROR"}, f"Couldn't save settings: {e}")
+            self.report({"ERROR", f"Couldn't save settings: {e}"})
             return {"CANCELLED"}
         self.report({"INFO"}, "Settings reset")
         return {"FINISHED"}

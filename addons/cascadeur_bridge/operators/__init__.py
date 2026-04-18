@@ -10,10 +10,6 @@ else:
     importlib.reload(addon_properties)
 
 classes = [
-    fbx_transfer.CBB_OT_export_blender_fbx,
-    fbx_transfer.CBB_OT_import_cascadeur_fbx,
-    fbx_transfer.CBB_OT_import_action_to_selected,
-    fbx_transfer.CBB_OT_import_retarget_bake_to_selected,
     fbx_transfer.CBB_OT_retarget_config_add,
     fbx_transfer.CBB_OT_retarget_config_remove,
     fbx_transfer.CBB_OT_import_retarget_bake_config,
