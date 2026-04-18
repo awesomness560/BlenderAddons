@@ -151,13 +151,12 @@ class CascadeurHandler:
             if env.get(k, None) == "":
                 env.pop(k, None)
 
-        # Cascadeur (bundled Qt) often lacks the Wayland QPA plugin; force XCB on Wayland.
-        if env.get("XDG_SESSION_TYPE") == "wayland":
+        # Match a known-good shell launch on Linux, e.g.:
+        #   env QT_QPA_PLATFORM=xcb QT_SCALE_FACTOR=1.80 /opt/cascadeur-linux/cascadeur
+        # Scaling often only applies as expected with xcb; only forcing on Wayland was not enough.
+        if platform.system() == "Linux":
             env["QT_QPA_PLATFORM"] = "xcb"
-
-        # UI scaling (useful for HiDPI / fractional scaling setups).
-        # User requested default: 1.80
-        env.setdefault("QT_SCALE_FACTOR", "1.80")
+            env["QT_SCALE_FACTOR"] = "1.80"
 
         return env
 

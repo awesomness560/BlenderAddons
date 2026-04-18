@@ -41,6 +41,7 @@ class CBB_PT_csc_export_settings(PanelBasics, bpy.types.Panel):
         col.prop(addon_props, "cbb_csc_apply_euler_filter")
         col.prop(addon_props, "cbb_csc_up_axis")
         col.prop(addon_props, "cbb_csc_bake_animation")
+        col.prop(addon_props, "cbb_csc_import_selected")
 
 
 class CBB_PT_blender_export_settings(PanelBasics, bpy.types.Panel):

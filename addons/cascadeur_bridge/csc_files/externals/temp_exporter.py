@@ -53,7 +53,7 @@ def run(scene):
         client.close()
         return
 
-    method_name = settings_dict.get("export_method", "export_all_objects")
+    method_name = commons.resolve_export_method(settings_dict)
     if not hasattr(fbx_scene_loader, method_name):
         available = [n for n in dir(fbx_scene_loader) if n.startswith("export_")]
         msg = (

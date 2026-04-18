@@ -17,7 +17,7 @@ def run(scene):
         scene.error(f"Couldn't create socket. Error: {e}")
         return
     settings_dict = client.receive_message()
-    method_name = settings_dict.get("export_method", "export_all_objects")
+    method_name = commons.resolve_export_method(settings_dict)
     export_paths = []
 
     for s in scenes:

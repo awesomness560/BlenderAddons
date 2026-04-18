@@ -93,10 +93,21 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             row_box = box.box()
             row = row_box.row(align=True)
             row.prop(cfg, "target_armature", text="")
-            op = row.operator(
-                "cbb.import_cascadeur_retarget_bake_config", text="Import", icon="IMPORT"
+            btns = row.row(align=True)
+            op = btns.operator(
+                "cbb.import_cascadeur_retarget_bake_config",
+                text="Import",
+                icon="IMPORT",
             )
             op.config_index = idx
+            op.force_selected_interval = False
+            op = btns.operator(
+                "cbb.import_cascadeur_retarget_bake_config",
+                text="Interval",
+                icon="PREVIEW_RANGE",
+            )
+            op.config_index = idx
+            op.force_selected_interval = True
 
             row = row_box.row(align=True)
             row.prop(cfg, "preserve_existing_keys", text="Preserve keys (insert)")

@@ -557,6 +557,14 @@ class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
     bl_label = "Import (Config)"
 
     config_index: bpy.props.IntProperty(default=0)
+    force_selected_interval: bpy.props.BoolProperty(
+        name="Selected interval export",
+        description=(
+            "If enabled, export from Cascadeur using only the timeline's selected frame range "
+            "(same as enabling Export selected intervals for this run only)"
+        ),
+        default=False,
+    )
 
     target_armature_obj: Optional[bpy.types.Object] = None
     imported_objects: list[bpy.types.Object] = []
@@ -576,7 +584,12 @@ class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
         self.server_socket.run()
 
         if self.server_socket.client_socket:
-            self.server_socket.send_message(get_csc_export_settings())
+            export_settings = (
+                get_csc_export_settings(force_selected_interval=True)
+                if self.force_selected_interval
+                else get_csc_export_settings()
+            )
+            self.server_socket.send_message(export_settings)
             data = self.server_socket.receive_message()
             if data:
                 if not isinstance(data, list):

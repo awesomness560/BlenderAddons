@@ -1,4 +1,6 @@
 import bpy
+from typing import Optional
+
 from ..utils import config_handling
 
 
@@ -9,8 +11,11 @@ def generate_items(options: list) -> list:
 class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
     # Cascadeur Export settings
     cbb_csc_import_selected: bpy.props.BoolProperty(
-        name="Selected Interval",
-        description="Import selected interval only",
+        name="Export Selected Interval",
+        description=(
+            "When enabled, Cascadeur exports only the frames selected on its timeline "
+            "(used by Retarget Config 'Import' and other bridge imports unless you use the Interval button)"
+        ),
         default=config_handling.get_config_parameter(
             "FBX Settings",
             "cbb_csc_import_selected",
@@ -465,10 +470,13 @@ def unregister_props():
     bpy.utils.unregister_class(CBB_PG_fbx_settings)
 
 
-def get_csc_export_settings() -> dict:
+def get_csc_export_settings(force_selected_interval: Optional[bool] = None) -> dict:
     settings = {}
     addon_props = bpy.context.scene.cbb_fbx_settings
-    settings["selected_interval"] = addon_props.cbb_csc_import_selected
+    if force_selected_interval is None:
+        settings["selected_interval"] = addon_props.cbb_csc_import_selected
+    else:
+        settings["selected_interval"] = bool(force_selected_interval)
     settings["euler_filter"] = addon_props.cbb_csc_apply_euler_filter
     settings["up_axis"] = addon_props.cbb_csc_up_axis
     settings["bake_animation"] = addon_props.cbb_csc_bake_animation
