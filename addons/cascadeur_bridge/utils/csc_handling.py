@@ -155,6 +155,10 @@ class CascadeurHandler:
         if env.get("XDG_SESSION_TYPE") == "wayland":
             env["QT_QPA_PLATFORM"] = "xcb"
 
+        # UI scaling (useful for HiDPI / fractional scaling setups).
+        # User requested default: 1.80
+        env.setdefault("QT_SCALE_FACTOR", "1.80")
+
         return env
 
     def _sync_external_commands(self) -> None:

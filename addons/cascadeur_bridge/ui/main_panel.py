@@ -63,6 +63,11 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
         row.scale_y = 1.2
         row = col.row()
         row.prop(addon_props, "cbb_export_methods")
+        col.operator(
+            "cbb.import_cascadeur_retarget_bake",
+            text="Import + Retarget (Bake)",
+            icon="ARMATURE_DATA",
+        )
         props = col.operator(
             "cbb.import_cascadeur_action",
             text="Import Action",
