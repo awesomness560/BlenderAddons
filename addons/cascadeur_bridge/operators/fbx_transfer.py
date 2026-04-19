@@ -57,9 +57,15 @@ def _ensure_current_action(armature_obj: bpy.types.Object) -> bpy.types.Action:
     return armature_obj.animation_data.action
 
 
-def _clear_action(action: bpy.types.Action) -> None:
+def _clear_pose_bone_fcurves(action: bpy.types.Action) -> None:
+    """Remove only pose-bone animation from *action*, keep object-level F-curves.
+
+    Full action clears were resetting armatures that had been moved in the scene via
+    object transform keys (same action as the rig). Retarget only replaces bone motion.
+    """
     for fc in list(action.fcurves):
-        action.fcurves.remove(fc)
+        if fc.data_path.startswith("pose.bones"):
+            action.fcurves.remove(fc)
 
 
 def _shift_action_frames(action: bpy.types.Action, delta: float) -> None:
@@ -93,6 +99,41 @@ def _bone_skipped_by_keywords(bone_name: str, keywords: list[str]) -> bool:
     return any(k in lower for k in keywords)
 
 
+# Object-level paths on bpy.types.Object (not pose bones). FBX often keys these at origin each frame.
+_OBJECT_TRANSFORM_FCURVE_PATHS = frozenset(
+    {
+        "location",
+        "rotation_euler",
+        "rotation_quaternion",
+        "rotation_axis_angle",
+        "scale",
+        "delta_location",
+        "delta_rotation_euler",
+        "delta_rotation_quaternion",
+        "delta_scale",
+    }
+)
+
+
+def _strip_object_transform_fcurves_from_action(armature_obj: bpy.types.Object) -> None:
+    """Remove object transform channels from *armature_obj*'s action.
+
+    Imported FBX animation frequently includes keyframes on the armature *object* that keep it
+    at the world origin on every frame. That overrides a one-time ``matrix_world`` alignment, so
+    Copy Transforms still sees the source at the origin: target object stays put but baked pose
+    matches motion around world zero.
+    """
+    if armature_obj.type != "ARMATURE":
+        return
+    ad = armature_obj.animation_data
+    if not ad or not ad.action:
+        return
+    action = ad.action
+    for fc in list(action.fcurves):
+        if fc.data_path in _OBJECT_TRANSFORM_FCURVE_PATHS:
+            action.fcurves.remove(fc)
+
+
 def _retarget_and_bake_pose(
     *,
     source_armature_obj: bpy.types.Object,
@@ -104,6 +145,14 @@ def _retarget_and_bake_pose(
     skip_keywords = _retarget_exclude_keywords(
         getattr(addon_props, "cbb_retarget_exclude_substrings", "") or ""
     )
+
+    # Copy Transforms matches bones in *world* space. Align the source object to the target,
+    # and strip object-level keys on the import so per-frame FBX object animation does not
+    # keep the source rig at world origin (which would leave bone motion there while the target
+    # object transform stays where the user moved it).
+    _strip_object_transform_fcurves_from_action(source_armature_obj)
+    source_armature_obj.matrix_world = target_armature_obj.matrix_world.copy()
+    bpy.context.view_layer.update()
 
     _select_only(target_armature_obj)
     bpy.ops.object.mode_set(mode="POSE")
@@ -301,7 +350,7 @@ class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
 
                 target_action = _ensure_current_action(self.target_armature_obj)
                 if not self._preserve_existing_keys:
-                    _clear_action(target_action)
+                    _clear_pose_bone_fcurves(target_action)
 
                 src_action = None
                 if source_armature_obj.animation_data:
