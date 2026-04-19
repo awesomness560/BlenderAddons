@@ -80,6 +80,19 @@ def _select_only(obj: bpy.types.Object) -> None:
     bpy.context.view_layer.objects.active = obj
 
 
+def _retarget_exclude_keywords(exclude_string: str) -> list[str]:
+    if not exclude_string or not exclude_string.strip():
+        return []
+    return [t.strip().lower() for t in exclude_string.split(",") if t.strip()]
+
+
+def _bone_skipped_by_keywords(bone_name: str, keywords: list[str]) -> bool:
+    if not keywords:
+        return False
+    lower = bone_name.lower()
+    return any(k in lower for k in keywords)
+
+
 def _retarget_and_bake_pose(
     *,
     source_armature_obj: bpy.types.Object,
@@ -87,23 +100,38 @@ def _retarget_and_bake_pose(
     frame_start: int,
     frame_end: int,
 ) -> None:
-    # Add constraints to target bones that exist on source.
+    addon_props = bpy.context.scene.cbb_fbx_settings
+    skip_keywords = _retarget_exclude_keywords(
+        getattr(addon_props, "cbb_retarget_exclude_substrings", "") or ""
+    )
+
     _select_only(target_armature_obj)
     bpy.ops.object.mode_set(mode="POSE")
 
     source_pose_bones = source_armature_obj.pose.bones
     target_pose_bones = target_armature_obj.pose.bones
 
+    constrained: list[bpy.types.PoseBone] = []
     for pb in target_pose_bones:
         if pb.name not in source_pose_bones:
+            continue
+        if _bone_skipped_by_keywords(pb.name, skip_keywords):
             continue
         c = pb.constraints.new(type="COPY_TRANSFORMS")
         c.target = source_armature_obj
         c.subtarget = pb.name
+        constrained.append(pb)
 
-    # Ensure all bones are selected for baking with only_selected=True.
     for pb in target_pose_bones:
+        pb.bone.select = False
+    for pb in constrained:
         pb.bone.select = True
+
+    if not constrained:
+        bpy.ops.object.mode_set(mode="OBJECT")
+        raise RuntimeError(
+            "No bones left to retarget (all skipped by keywords or no name match with import)."
+        )
 
     bpy.ops.nla.bake(
         frame_start=frame_start,

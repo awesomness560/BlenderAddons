@@ -14,7 +14,7 @@ def get_config() -> configparser.ConfigParser:
 
     :return configparser.ConfigParser: ConfigParser for the config file
     """
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     config.read(config_path)
     return config
 
@@ -110,6 +110,18 @@ def save_fbx_settings() -> None:
         config.write(configfile)
 
 
+def save_retarget_skip_keywords() -> None:
+    """Persist only the retarget skip keyword list under FBX Settings."""
+    config = get_config()
+    section = "FBX Settings"
+    if not config.has_section(section):
+        config.add_section(section)
+    value = bpy.context.scene.cbb_fbx_settings.cbb_retarget_exclude_substrings or ""
+    config.set(section, "cbb_retarget_exclude_substrings", value)
+    with open(config_path, "w") as configfile:
+        config.write(configfile)
+
+
 def reset_fbx_settings() -> None:
     """
     Remove the FBX Settings section from the config file if it exists
@@ -137,7 +149,7 @@ def save_port_number() -> bool:
     # Cascadeur config
     ch = CascadeurHandler()
     commands_path = os.path.join(ch.commands_path, "externals", "settings.cfg")
-    csc_config = configparser.ConfigParser()
+    csc_config = configparser.ConfigParser(interpolation=None)
     csc_config.read(commands_path)
     csc_config.set(section, "port", str(port_number))
     try:

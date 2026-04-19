@@ -230,6 +230,21 @@ class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
         ),
     )  # type: ignore
 
+    cbb_retarget_exclude_substrings: bpy.props.StringProperty(
+        name="Skip retargets",
+        description=(
+            "Comma-separated substrings. Target bones whose names contain any keyword "
+            "(case-insensitive) are not retargeted or keyed. Example: hair, skirt, cloth. "
+            "Use Save Skip Retargets to store in settings.cfg."
+        ),
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_retarget_exclude_substrings",
+            str,
+            fallback="",
+        ),
+    )
+
     cbb_port: bpy.props.IntProperty(
         name="Port",
         description="Port number used for communicating with Cascadeur",
@@ -351,4 +366,20 @@ class CBB_OT_save_port_number(bpy.types.Operator):
             self.report({"INFO"}, "Restart Blender as Admin and try again")
             return {"CANCELLED"}
         self.report({"INFO"}, "Settings saved")
+        return {"FINISHED"}
+
+
+class CBB_OT_save_retarget_skip_keywords(bpy.types.Operator):
+    """Write Skip retargets keyword list to settings.cfg (FBX Settings section)."""
+
+    bl_idname = "cbb.save_retarget_skip_keywords"
+    bl_label = "Save Skip Retargets"
+
+    def execute(self, context):
+        try:
+            config_handling.save_retarget_skip_keywords()
+        except Exception as e:
+            self.report({"ERROR"}, f"Couldn't save skip retargets: {e}")
+            return {"CANCELLED"}
+        self.report({"INFO"}, "Skip retargets saved")
         return {"FINISHED"}

@@ -40,6 +40,25 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             col.label(icon="LOCKED", text="Operation in progress!")
             col.separator()
 
+        addon_props = context.scene.cbb_fbx_settings
+        skip_box = layout.box()
+        skip_box.label(text="Skip retargets")
+        row = skip_box.row(align=True)
+        row.prop(
+            addon_props,
+            "cbb_retarget_exclude_substrings",
+            text="Keywords",
+        )
+        row.operator(
+            "cbb.save_retarget_skip_keywords",
+            text="Save",
+            icon="FILE_TICK",
+        )
+        skip_box.label(
+            text="If a linked rig collapses, try Append (even with Library Override some assets need it).",
+            icon="INFO",
+        )
+
         box = layout.box()
         header = box.row(align=True)
         header.label(text="Retarget Configs")
