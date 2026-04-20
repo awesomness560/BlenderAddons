@@ -11,11 +11,15 @@ def resolve_export_method(settings_dict: dict) -> str:
     method = settings_dict.get("export_method", "export_all_objects")
     if not settings_dict.get("selected_interval"):
         return method
+    # Every UI enum value must map here; otherwise Interval matches full export and appears broken.
     interval_map = {
         "export_all_objects": "export_scene_selected_frames",
         "export_joints": "export_joints_selected_frames",
-        "export_scene_selected": "export_scene_selected_frames",
         "export_joints_selected": "export_joints_selected_frames",
+        "export_joints_selected_frames": "export_joints_selected_frames",
+        "export_scene_selected": "export_scene_selected_frames",
+        "export_scene_selected_frames": "export_scene_selected_frames",
+        "export_scene_selected_objects": "export_scene_selected_frames",
     }
     return interval_map.get(method, method)
 

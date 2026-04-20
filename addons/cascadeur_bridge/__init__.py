@@ -87,5 +87,5 @@ def register():
 
 def unregister():
     operators.addon_properties.unregister_props()
-    for cls in classes:
+    for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

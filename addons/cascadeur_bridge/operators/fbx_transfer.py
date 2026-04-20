@@ -428,3 +428,8 @@ class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
         CascadeurHandler().execute_csc_command("commands.externals.temp_exporter")
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
+
+    def invoke(self, context, event):
+        # Ensures RNA properties set from the panel (e.g. force_selected_interval) are applied
+        # before execute runs (needed on some Blender builds).
+        return self.execute(context)
