@@ -110,14 +110,34 @@ def save_fbx_settings() -> None:
         config.write(configfile)
 
 
+def get_retarget_filter_settings() -> tuple[str, str]:
+    """Return (skip_keywords_csv, filter_mode) from scene, falling back to settings.cfg."""
+    props = bpy.context.scene.cbb_fbx_settings
+    keywords = props.cbb_retarget_exclude_substrings or ""
+    if not keywords.strip():
+        keywords = get_config_parameter(
+            "FBX Settings",
+            "cbb_retarget_exclude_substrings",
+            str,
+            fallback="",
+        ) or ""
+
+    filter_mode = props.cbb_retarget_filter_mode or "BOTH"
+    if filter_mode not in {"BOTH", "KEYWORDS_ONLY", "FLAGS_ONLY"}:
+        filter_mode = "BOTH"
+
+    return keywords, filter_mode
+
+
 def save_retarget_skip_keywords() -> None:
-    """Persist only the retarget skip keyword list under FBX Settings."""
+    """Persist retarget keyword and flag filter settings under FBX Settings."""
     config = get_config()
     section = "FBX Settings"
     if not config.has_section(section):
         config.add_section(section)
-    value = bpy.context.scene.cbb_fbx_settings.cbb_retarget_exclude_substrings or ""
-    config.set(section, "cbb_retarget_exclude_substrings", value)
+    props = bpy.context.scene.cbb_fbx_settings
+    config.set(section, "cbb_retarget_exclude_substrings", props.cbb_retarget_exclude_substrings or "")
+    config.set(section, "cbb_retarget_filter_mode", props.cbb_retarget_filter_mode)
     with open(config_path, "w") as configfile:
         config.write(configfile)
 

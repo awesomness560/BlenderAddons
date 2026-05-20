@@ -8,6 +8,14 @@ def generate_items(options: list) -> list:
     return [(option, option, "") for option in options]
 
 
+def generate_labeled_items(options: list[tuple[str, str, str]]) -> list:
+    return options
+
+
+RETARGET_FLAG_PROP = "cbb_retarget_enabled"
+RETARGET_FILTER_MODES = frozenset({"BOTH", "KEYWORDS_ONLY", "FLAGS_ONLY"})
+
+
 class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
     # Cascadeur Export settings
     cbb_csc_import_selected: bpy.props.BoolProperty(
@@ -235,13 +243,45 @@ class CBB_PG_fbx_settings(bpy.types.PropertyGroup):
         description=(
             "Comma-separated substrings. Target bones whose names contain any keyword "
             "(case-insensitive) are not retargeted or keyed. Example: hair, skirt, cloth. "
-            "Use Save Skip Retargets to store in settings.cfg."
+            "Use Save Retarget Filters to store in settings.cfg."
         ),
         default=config_handling.get_config_parameter(
             "FBX Settings",
             "cbb_retarget_exclude_substrings",
             str,
             fallback="",
+        ),
+    )
+
+    cbb_retarget_filter_mode: bpy.props.EnumProperty(
+        name="Retarget Filter",
+        description=(
+            "How keyword skips and per-bone retarget flags are combined during retargeting"
+        ),
+        items=generate_labeled_items(
+            [
+                (
+                    "BOTH",
+                    "Keywords + Flags",
+                    "Retarget only bones that are flagged and do not match skip keywords",
+                ),
+                (
+                    "KEYWORDS_ONLY",
+                    "Skip Keywords Only",
+                    "Retarget all matching bones except those whose names contain a skip keyword",
+                ),
+                (
+                    "FLAGS_ONLY",
+                    "Flags Only",
+                    "Retarget only bones that have been explicitly flagged",
+                ),
+            ]
+        ),
+        default=config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_retarget_filter_mode",
+            str,
+            fallback="BOTH",
         ),
     )
 
@@ -281,6 +321,12 @@ class CBB_PG_retarget_config(bpy.types.PropertyGroup):
 
 
 def register_props():
+    bpy.types.Bone.cbb_retarget_enabled = bpy.props.BoolProperty(
+        name="CBB Retarget",
+        description="Include this bone when retarget filter mode uses per-bone flags",
+        default=False,
+        override={"LIBRARY_OVERRIDABLE"},
+    )
     bpy.utils.register_class(CBB_PG_fbx_settings)
     bpy.types.Scene.cbb_fbx_settings = bpy.props.PointerProperty(
         type=CBB_PG_fbx_settings
@@ -300,6 +346,10 @@ def unregister_props():
         pass
     bpy.utils.unregister_class(CBB_PG_retarget_config)
     bpy.utils.unregister_class(CBB_PG_fbx_settings)
+    try:
+        del bpy.types.Bone.cbb_retarget_enabled
+    except Exception:
+        pass
 
 
 def get_csc_export_settings(force_selected_interval: Optional[bool] = None) -> dict:
@@ -369,17 +419,43 @@ class CBB_OT_save_port_number(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CBB_OT_load_retarget_filters(bpy.types.Operator):
+    """Load retarget filter settings from settings.cfg into the scene."""
+
+    bl_idname = "cbb.load_retarget_filters"
+    bl_label = "Load Retarget Filters"
+
+    def execute(self, context):
+        props = context.scene.cbb_fbx_settings
+        props.cbb_retarget_exclude_substrings = config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_retarget_exclude_substrings",
+            str,
+            fallback="",
+        ) or ""
+        mode = config_handling.get_config_parameter(
+            "FBX Settings",
+            "cbb_retarget_filter_mode",
+            str,
+            fallback="BOTH",
+        )
+        if mode in RETARGET_FILTER_MODES:
+            props.cbb_retarget_filter_mode = mode
+        self.report({"INFO"}, "Retarget filters loaded from settings.cfg")
+        return {"FINISHED"}
+
+
 class CBB_OT_save_retarget_skip_keywords(bpy.types.Operator):
-    """Write Skip retargets keyword list to settings.cfg (FBX Settings section)."""
+    """Write retarget filter settings to settings.cfg (FBX Settings section)."""
 
     bl_idname = "cbb.save_retarget_skip_keywords"
-    bl_label = "Save Skip Retargets"
+    bl_label = "Save Retarget Filters"
 
     def execute(self, context):
         try:
             config_handling.save_retarget_skip_keywords()
         except Exception as e:
-            self.report({"ERROR"}, f"Couldn't save skip retargets: {e}")
+            self.report({"ERROR"}, f"Couldn't save retarget filters: {e}")
             return {"CANCELLED"}
-        self.report({"INFO"}, "Skip retargets saved")
+        self.report({"INFO"}, "Retarget filters saved")
         return {"FINISHED"}

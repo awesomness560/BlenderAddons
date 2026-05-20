@@ -41,9 +41,10 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             col.separator()
 
         addon_props = context.scene.cbb_fbx_settings
-        skip_box = layout.box()
-        skip_box.label(text="Skip retargets")
-        row = skip_box.row(align=True)
+        filter_box = layout.box()
+        filter_box.label(text="Retarget filters")
+        filter_box.prop(addon_props, "cbb_retarget_filter_mode", text="Mode")
+        row = filter_box.row(align=True)
         row.prop(
             addon_props,
             "cbb_retarget_exclude_substrings",
@@ -54,7 +55,31 @@ class CBB_PT_parent_panel(PanelBasics, bpy.types.Panel):
             text="Save",
             icon="FILE_TICK",
         )
-        skip_box.label(
+        row.operator(
+            "cbb.load_retarget_filters",
+            text="Load",
+            icon="IMPORT",
+        )
+        row = filter_box.row(align=True)
+        row.operator(
+            "cbb.flag_selected_retarget_bones",
+            text="Flag Selected",
+            icon="CHECKMARK",
+        )
+        row.operator(
+            "cbb.unflag_selected_retarget_bones",
+            text="Unflag Selected",
+            icon="X",
+        )
+        filter_box.label(
+            text="Flag bones on the same armature set in Retarget Config below.",
+            icon="BONE_DATA",
+        )
+        filter_box.label(
+            text="Skip keywords exclude matching bone names (not a whitelist).",
+            icon="INFO",
+        )
+        filter_box.label(
             text="If a linked rig collapses, try Append (even with Library Override some assets need it).",
             icon="INFO",
         )

@@ -10,6 +10,8 @@ else:
     importlib.reload(addon_properties)
 
 classes = [
+    fbx_transfer.CBB_OT_flag_selected_retarget_bones,
+    fbx_transfer.CBB_OT_unflag_selected_retarget_bones,
     fbx_transfer.CBB_OT_retarget_config_add,
     fbx_transfer.CBB_OT_retarget_config_remove,
     fbx_transfer.CBB_OT_import_retarget_bake_config,
@@ -18,5 +20,6 @@ classes = [
     addon_properties.CBB_OT_save_fbx_settings,
     addon_properties.CBB_OT_reset_fbx_settings,
     addon_properties.CBB_OT_save_port_number,
+    addon_properties.CBB_OT_load_retarget_filters,
     addon_properties.CBB_OT_save_retarget_skip_keywords,
 ]

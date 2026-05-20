@@ -1,7 +1,8 @@
 import bpy
 
-from .addon_properties import get_csc_export_settings
+from .addon_properties import RETARGET_FLAG_PROP, get_csc_export_settings
 from ..utils import file_handling
+from ..utils import config_handling
 from ..utils.server_socket import ServerSocket
 from ..utils.csc_handling import CascadeurHandler
 from .. import addon_info
@@ -99,6 +100,77 @@ def _bone_skipped_by_keywords(bone_name: str, keywords: list[str]) -> bool:
     return any(k in lower for k in keywords)
 
 
+def _bone_has_retarget_flag(pose_bone: bpy.types.PoseBone) -> bool:
+    bone = pose_bone.bone
+    if hasattr(bone, RETARGET_FLAG_PROP):
+        return bool(getattr(bone, RETARGET_FLAG_PROP))
+    return bool(bone.get(RETARGET_FLAG_PROP, False))
+
+
+def _set_bone_retarget_flag(bone: bpy.types.Bone, enabled: bool) -> bool:
+    if hasattr(bone, RETARGET_FLAG_PROP):
+        try:
+            setattr(bone, RETARGET_FLAG_PROP, enabled)
+            return True
+        except (AttributeError, TypeError, RuntimeError):
+            return False
+
+    try:
+        if enabled:
+            bone[RETARGET_FLAG_PROP] = True
+        elif RETARGET_FLAG_PROP in bone:
+            del bone[RETARGET_FLAG_PROP]
+        return True
+    except (TypeError, RuntimeError):
+        return False
+
+
+def _should_retarget_bone(
+    pose_bone: bpy.types.PoseBone,
+    source_pose_bones: bpy.types.bpy_prop_collection,
+    skip_keywords: list[str],
+    filter_mode: str,
+) -> bool:
+    if pose_bone.name not in source_pose_bones:
+        return False
+
+    passes_keywords = not _bone_skipped_by_keywords(pose_bone.name, skip_keywords)
+    has_flag = _bone_has_retarget_flag(pose_bone)
+
+    if filter_mode == "KEYWORDS_ONLY":
+        return passes_keywords
+    if filter_mode == "FLAGS_ONLY":
+        return has_flag
+    return passes_keywords and has_flag
+
+
+def _armature_for_flagging(context) -> Optional[bpy.types.Object]:
+    obj = context.active_object
+    if obj and obj.type == "ARMATURE":
+        return obj
+    return None
+
+
+def _selected_bones_for_flagging(
+    context, armature_obj: bpy.types.Object
+) -> list[bpy.types.Bone]:
+    if context.mode == "POSE" and context.active_object == armature_obj:
+        return [pb.bone for pb in (context.selected_pose_bones or [])]
+
+    if context.mode == "EDIT_ARMATURE" and context.active_object == armature_obj:
+        edit_bones = context.selected_editable_bones or []
+        return [
+            armature_obj.data.bones[eb.name]
+            for eb in edit_bones
+            if eb.name in armature_obj.data.bones
+        ]
+
+    if context.mode == "OBJECT":
+        return [b for b in armature_obj.data.bones if b.select]
+
+    return []
+
+
 # Object-level paths on bpy.types.Object (not pose bones). FBX often keys these at origin each frame.
 _OBJECT_TRANSFORM_FCURVE_PATHS = frozenset(
     {
@@ -140,11 +212,9 @@ def _retarget_and_bake_pose(
     target_armature_obj: bpy.types.Object,
     frame_start: int,
     frame_end: int,
-) -> None:
-    addon_props = bpy.context.scene.cbb_fbx_settings
-    skip_keywords = _retarget_exclude_keywords(
-        getattr(addon_props, "cbb_retarget_exclude_substrings", "") or ""
-    )
+) -> int:
+    keywords_csv, filter_mode = config_handling.get_retarget_filter_settings()
+    skip_keywords = _retarget_exclude_keywords(keywords_csv)
 
     # Copy Transforms matches bones in *world* space. Align the source object to the target,
     # and strip object-level keys on the import so per-frame FBX object animation does not
@@ -160,11 +230,27 @@ def _retarget_and_bake_pose(
     source_pose_bones = source_armature_obj.pose.bones
     target_pose_bones = target_armature_obj.pose.bones
 
+    if filter_mode == "KEYWORDS_ONLY" and not skip_keywords:
+        bpy.ops.object.mode_set(mode="OBJECT")
+        raise RuntimeError(
+            "Skip Keywords Only is active but no skip keywords are set. "
+            "Enter keywords in the panel or click Load to read settings.cfg."
+        )
+
+    if filter_mode in {"BOTH", "FLAGS_ONLY"}:
+        flagged_count = sum(
+            1 for pb in target_pose_bones if _bone_has_retarget_flag(pb)
+        )
+        if flagged_count == 0:
+            bpy.ops.object.mode_set(mode="OBJECT")
+            raise RuntimeError(
+                f"No bones are flagged on target armature '{target_armature_obj.name}'. "
+                "Select bones and use Flag Selected on that armature first."
+            )
+
     constrained: list[bpy.types.PoseBone] = []
     for pb in target_pose_bones:
-        if pb.name not in source_pose_bones:
-            continue
-        if _bone_skipped_by_keywords(pb.name, skip_keywords):
+        if not _should_retarget_bone(pb, source_pose_bones, skip_keywords, filter_mode):
             continue
         c = pb.constraints.new(type="COPY_TRANSFORMS")
         c.target = source_armature_obj
@@ -179,7 +265,7 @@ def _retarget_and_bake_pose(
     if not constrained:
         bpy.ops.object.mode_set(mode="OBJECT")
         raise RuntimeError(
-            "No bones left to retarget (all skipped by keywords or no name match with import)."
+            "No bones left to retarget after applying name matching and the active retarget filters."
         )
 
     bpy.ops.nla.bake(
@@ -193,6 +279,7 @@ def _retarget_and_bake_pose(
     )
 
     bpy.ops.object.mode_set(mode="OBJECT")
+    return len(constrained)
 
 
 def delete_objects(objects: list) -> None:
@@ -256,6 +343,86 @@ class OperatorBaseClass(bpy.types.Operator):
             self.report({"ERROR"}, str(e))
             addon_info.operation_completed = True
             return {"CANCELLED"}
+
+
+class CBB_OT_flag_selected_retarget_bones(bpy.types.Operator):
+    bl_idname = "cbb.flag_selected_retarget_bones"
+    bl_label = "Flag Selected Bones"
+    bl_description = (
+        "Mark selected bones on the active armature for flag-based retarget filtering"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return _armature_for_flagging(context) is not None
+
+    def execute(self, context):
+        armature_obj = _armature_for_flagging(context)
+        if not armature_obj:
+            self.report({"WARNING"}, "Select the target armature first.")
+            return {"CANCELLED"}
+
+        bones = _selected_bones_for_flagging(context, armature_obj)
+        if not bones:
+            self.report(
+                {"WARNING"},
+                "Select bones on the target armature (Pose, Edit, or Object mode).",
+            )
+            return {"CANCELLED"}
+
+        updated = 0
+        failed = 0
+        for bone in bones:
+            if _set_bone_retarget_flag(bone, True):
+                updated += 1
+            else:
+                failed += 1
+
+        msg = f"Flagged {updated} bone(s) on '{armature_obj.name}'."
+        if failed:
+            msg += f" {failed} bone(s) could not be edited (linked rig may need a library override)."
+        self.report({"INFO"}, msg)
+        return {"FINISHED"}
+
+
+class CBB_OT_unflag_selected_retarget_bones(bpy.types.Operator):
+    bl_idname = "cbb.unflag_selected_retarget_bones"
+    bl_label = "Unflag Selected Bones"
+    bl_description = "Clear the retarget flag from selected bones on the active armature"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return _armature_for_flagging(context) is not None
+
+    def execute(self, context):
+        armature_obj = _armature_for_flagging(context)
+        if not armature_obj:
+            self.report({"WARNING"}, "Select the target armature first.")
+            return {"CANCELLED"}
+
+        bones = _selected_bones_for_flagging(context, armature_obj)
+        if not bones:
+            self.report(
+                {"WARNING"},
+                "Select bones on the target armature (Pose, Edit, or Object mode).",
+            )
+            return {"CANCELLED"}
+
+        updated = 0
+        failed = 0
+        for bone in bones:
+            if _set_bone_retarget_flag(bone, False):
+                updated += 1
+            else:
+                failed += 1
+
+        msg = f"Cleared retarget flag on {updated} bone(s) on '{armature_obj.name}'."
+        if failed:
+            msg += f" {failed} bone(s) could not be edited (linked rig may need a library override)."
+        self.report({"INFO"}, msg)
+        return {"FINISHED"}
 
 
 class CBB_OT_retarget_config_add(bpy.types.Operator):
@@ -377,7 +544,7 @@ class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
                     src_end = int(src_end + delta)
 
                 try:
-                    _retarget_and_bake_pose(
+                    bone_count = _retarget_and_bake_pose(
                         source_armature_obj=source_armature_obj,
                         target_armature_obj=self.target_armature_obj,
                         frame_start=int(src_start),
@@ -399,7 +566,10 @@ class CBB_OT_import_retarget_bake_config(OperatorBaseClass):
 
                 self.target_armature_obj.select_set(True)
                 bpy.context.view_layer.objects.active = self.target_armature_obj
-                self.report({"INFO"}, "Finished")
+                self.report(
+                    {"INFO"},
+                    f"Finished ({bone_count} bone(s) retargeted on '{self.target_armature_obj.name}')",
+                )
                 self._cleanup()
                 return {"FINISHED"}
 
